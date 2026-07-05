@@ -1148,7 +1148,7 @@ def main() -> None:
     parser.add_argument("--component-config-file", type=Path, default=None)
     parser.add_argument("--config", default="basic")
     parser.add_argument("--target", choices=("devset", "public_labeled", "blind_a", "blind_b"), default="devset")
-    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv3")
+    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv5")
     parser.add_argument("--top-k", type=int, default=200)
     parser.add_argument("--only", nargs="*", default=None)
     parser.add_argument("--max-examples", type=int, default=None)

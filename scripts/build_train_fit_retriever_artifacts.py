@@ -1201,7 +1201,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="oof3_top500")
     parser.add_argument("--config-file", type=Path, default=Path("retriever/union/configs/union_v1.yaml"))
-    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv3")
+    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv5")
     parser.add_argument("--artifact-mode", default=None, help="Public OOF artifact mode, e.g. cv3_oof or cv5_oof.")
     parser.add_argument("--source", action="append", choices=ALL_SOURCES, default=[])
     parser.add_argument("--mode", choices=("public", "blind", "both"), default="both")

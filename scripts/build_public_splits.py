@@ -27,7 +27,7 @@ def rel(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "artifacts" / "cache" / "splits" / "cv3")
+    parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "artifacts" / "cache" / "splits" / "cv5")
     parser.add_argument("--name", default=None)
     parser.add_argument("--seed", type=int, default=20260515)
     parser.add_argument("--n-splits", type=int, default=3)

@@ -650,7 +650,7 @@ def main() -> None:
     parser.add_argument("--config", default="oof3_top500")
     parser.add_argument("--config-file", type=Path, required=True)
     parser.add_argument("--target", choices=("public_labeled", "blind_a", "blind_b"), default="public_labeled")
-    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv3")
+    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts/cache/splits/cv5")
     parser.add_argument("--artifact-mode", default=None, help="Public OOF artifact mode, e.g. cv3_oof or cv5_oof.")
     parser.add_argument("--mapping", type=Path, default=REPO_ROOT / "artifacts/cache/spotify_uuid_map.parquet")
     parser.add_argument("--top-k", type=int, default=None)
