@@ -822,6 +822,7 @@ def encode_dense_queries(
         parts.append(encoder.encode(queries[i : i + chunk]))
     emb = np.concatenate(parts, axis=0).astype(np.float32)
     if use_cache:
+        Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(cache_path, keys=keys, embeddings=emb)
     return emb
 
