@@ -22,7 +22,7 @@ Method details: [`docs/method.md`](docs/method.md).
 | --- | --- | --- | --- |
 | 1. Blind-B inference (load-only) | `run_inference.sh` | shipped weights + union artifact + dense caches; **no GPU for the ranking**, 80GB GPU only for the responder | rank ≈ 10 min CPU; responder ≈ 1.5–2 h GPU |
 | 2. 5-fold CV validation | `run_cv5.sh` | **public sources built first** (run_preprocess + build_stage1/2 — GPU for two-tower); ≥128GB RAM | source builds + several hours CPU (refits 5 fold models) |
-| 3. Train from scratch | `run_train.sh` | full downloads; 16–24GB GPU + ≥128GB RAM | ≈ half a day |
+| 3. Train from scratch | `run_full.sh` | full downloads; GPU (two-tower) + ≥128GB RAM | ≈ half a day |
 
 The ranking part of flow 1 is **deterministic and CPU-only**: the reranker loads the shipped LightGBM model (`weights/reranker_lgbm.txt`, `--load-model`) and predicts over the shipped union artifact + dense caches. On the pinned environment (`uv.lock`) this reproduces the submitted Blind-B top-20 **bit-for-bit** (`verify_blind_b_ranking.py --strict` → 80/80); the default check is a soft top-20 overlap report, which is what the evaluation relies on (regenerating anything on a GPU, or a different library build, is not bit-reproducible). Responder text is seeded but GPU-nondeterministic; the submitted responses are in `reference/blind_b.json` for diffing (track lists must match; wording may not be bit-identical).
 
@@ -94,16 +94,7 @@ uv run python scripts/build_ranked_submission.py \
 bash run_cv5.sh
 ```
 
-**Prerequisite — this is not a load-only flow.** `download_weights.sh` ships only the Blind-B **union** artifact (+ the public `candidates.npz`), not the public-labeled per-source retriever artifacts that the CV union is built from. Build those first (the public/CV portion of `run_train.sh`):
-
-```bash
-bash run_preprocess.sh                 # cv3+cv5 splits, TPD1->catalog map
-bash scripts/build_stage1_sources.sh   # fit-free/metadata-fit public sources
-bash scripts/build_stage2_sources.sh   # two-tower LoRA + cooc/transition public sources (GPU)
-bash run_cv5.sh                        # rebuilds the public union (incl. 36GB source_features) + fits 5 folds
-```
-
-`run_cv5.sh` itself only rebuilds the union and **fits** the reranker per fold (a training run — hours, ≥128GB RAM); it does not generate retriever sources, and it errors early if the public-labeled sources are missing. Expected `scores.json`:
+**Not a load-only flow.** `run_cv5.sh` chains `run_preprocess.sh` → `run_retriever_cv5.sh` (builds the public-labeled sources, including two-tower training on a GPU) → `run_reranker_cv5.sh` (fits the reranker per fold over the public union). Self-contained but heavy: hours of CPU, a GPU for the two-tower, and ≥128GB RAM for the reranker fit. Expected `scores.json`:
 
 - `ndcg@20 ≈ 0.2743` — folds ≈ 0.27674 / 0.27546 / 0.27405 / 0.27212 / 0.27321
 - `candidate_recall@20 = 0.410234`
@@ -113,10 +104,18 @@ Last-digit wobble is expected (LightGBM histogram nondeterminism with `n_jobs=-1
 ## Train from scratch (flow 3)
 
 ```bash
-bash run_train.sh
+bash run_full.sh          # preprocess -> retrievers -> reranker (fit) -> responder -> submission
 ```
 
-Order: `run_preprocess.sh` (cv3+cv5 splits, TPD1→catalog map from TalkPlayData-2) → `scripts/build_stage1_sources.sh` (fit-free/metadata-fit sources for public_labeled **and** blind_b) → `scripts/build_stage2_sources.sh` (two-tower LoRA fold0-4 + full-public, cooc/transition incl. TalkPlayData-1 mixing) → union + reranker CV on public_labeled → union + reranker (fit mode) on blind_b, which writes `model.txt` → responder.
+`run_full.sh` runs the submission path from scratch — **no HF weights**: the two-tower is trained, the reranker is fit. Stages (each script documents its own dependencies in its header):
+
+- `run_preprocess.sh` — cv5 split, TPD1→catalog map, dense track embeddings.
+- `run_retriever_cv5.sh` — public_labeled sources (two-tower 5-fold OOF trained; cooc/transition incl. TalkPlayData-1) + public union.
+- `run_retriever_blind_b.sh` — blind_b sources (two-tower full-public trained; cooc/transition) + blind_b union.
+- `run_reranker_blind_b.sh` — fit the final reranker on the public union, rank blind_b (needs **both** retriever stages: cv5 for the fit, blind_b for the prediction).
+- `run_responder_blind_b.sh` — Qwen3.6-27B → submission zip.
+
+The 5-fold CV is a separate side branch, not on the submission path: `run_reranker_cv5.sh` (reranker CV over an already-built public union), or `run_cv5.sh` (retriever + reranker CV).
 
 `artifacts/cache/dense_track_emb.npz` (Qwen3-Embedding-0.6B encoding of track metadata) is shipped and reused rather than rebuilt — `preprocessing/dense_track_encoder.py` regenerates it if absent (GPU). Dense query features (`artifacts/cache/dense_qfeat/`) are re-encoded by the reranker automatically for any rows not in the cache (only `blind_b.npz` is shipped; train/devset are regenerated during training).
 
@@ -135,9 +134,10 @@ preprocessing/           build_splits (via scripts/), dense_track_encoder
 retriever/<component>/   13 candidate sources + union (main.py + configs)
 reranker/protocol_098_union_rich_lgbm/   config wrapper + configs
 responder/qwen36_27b/    prompt-template config (rich_context_hierpop_tagchain)
-scripts/                 cross-cutting builders + runners
+scripts/                 cross-cutting python builders + the reranker runner
   run_reranker.py        the reranker runner (supports --load-model)
-  build_stage1_sources.sh / build_stage2_sources.sh   training drivers
+run_preprocess / run_retriever_{cv5,blind_b} / run_reranker_{cv5,blind_b} /
+run_responder_blind_b / run_full   per-stage from-scratch drivers (repo root)
 artifacts/               all generated/downloaded state (gitignored)
   weights/               reranker_lgbm.txt, two_tower/{full_public,fold0..4}.pt
   cache/                 derived caches (mirrors the HF dataset repo)
