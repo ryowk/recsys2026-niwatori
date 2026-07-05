@@ -1,0 +1,17 @@
+# generated artifacts (weights/cache from HF, pipeline runs)
+/artifacts/
+/output/
+/results/
+/data/
+/splits/
+/logs/
+
+# env
+/.venv/
+__pycache__/
+*.pyc
+/.cache/
+.cache/huggingface/
+
+# local scratch
+/scratch/

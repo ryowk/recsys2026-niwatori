@@ -1,0 +1,113 @@
+description: >
+  [Blind-B-safe + combined TPD1 parts cooc500 cv5] current TPD1 combined
+  `blind_b_safe_combined_tpd1_parts_basecap_cv5` から cooc_track source cap
+  だけを 100 から 500 に広げる。TPD1 は no-purge で全fold共通に使う。
+
+selection_basis: fixed_combined_tpd1_no_devset_tuning_parts_cooc500
+split_dir: artifacts/cache/splits/cv5
+
+source_policy_defaults:
+  requires_labeled_fit: false
+  fit_sources: [track_metadata, target_input_context]
+  train_row_policy: safe_in_sample
+  fold_split_required_for_reranker_train: false
+  preferred_train_row_artifact_mode: fit_free_all_rows
+  preferred_inference_artifact_mode: fit_free_all_rows
+
+sources:
+  - name: bm25
+    component: bm25_5field_thought
+    config: top500_bsafe
+    max_candidates: 200
+  - name: tfidf
+    artifact:
+      public_labeled: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/cv3_oof/public_labeled
+      blind_b: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/full_public/blind_b
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: false
+      fit_sources: [track_metadata]
+      train_row_policy: safe_in_sample
+      preferred_train_row_artifact_mode: fit_free_all_rows
+      preferred_inference_artifact_mode: fit_free_all_rows
+  - name: twotower
+    component: two_tower_lora_thought
+    config: oof5_top500_bsafe
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_query_gold_pairs]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: history_artist
+    component: history_artist
+    config: top500
+  - name: history_album
+    component: history_album
+    config: top500
+  - name: last_artist
+    component: last_music_artist
+    config: top500
+  - name: last_album
+    component: last_music_album
+    config: top500
+  - name: exact_album_artist
+    component: exact_album_artist_source
+    config: top500
+  - name: tag_intent
+    component: tag_intent_bm25
+    config: top500_bsafe
+    max_candidates: 100
+  - name: cooc_track
+    component: cooc_track_combined_tpd1
+    config: oof5_top500_parts
+    max_candidates: 500
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: cv5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: transition_track
+    component: transition_track_combined_tpd1
+    config: oof5_top500_prob_parts
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: cv5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: cooc_album
+    component: cooc_album
+    config: oof5_top500
+    min_score: 5
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: cooc_artist_name
+    component: cooc_artist_name
+    config: oof5_top500
+    max_candidates: 100
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: exact_title
+    component: exact_title_artist_source
+    config: top500
+
+union_rule:
+  type: ordered_unique
+  max_candidates: null

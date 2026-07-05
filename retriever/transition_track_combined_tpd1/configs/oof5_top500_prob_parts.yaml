@@ -1,0 +1,25 @@
+source: transition_track_combined_tpd1
+top_k: 500
+min_count: 1
+emit_component_scores: true
+
+source_policy:
+  requires_labeled_fit: true
+  fit_sources:
+    - train_music_outcomes
+    - TalkPlayData-1
+  train_row_policy: cv5_oof_challenge_plus_external_fit_free
+  fold_split_required_for_reranker_train: true
+  preferred_train_row_artifact_mode: cv5_oof
+  preferred_inference_artifact_mode: full_public
+
+artifact_modes:
+  public_labeled: cv5_oof
+  blind_a: full_public
+  blind_b: full_public
+
+score_fields:
+  - score__primary
+  - score__transition_probability
+  - score__challenge
+  - score__tpd1
