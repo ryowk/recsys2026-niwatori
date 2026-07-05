@@ -24,8 +24,8 @@ sources:
 
   - name: tfidf
     artifact:
-      public_labeled: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/cv3_oof/public_labeled
-      blind_b: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/full_public/blind_b
+      public_labeled: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/fit_free_all_rows/public_labeled
+      blind_b: artifacts/runs/retriever/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/fit_free_all_rows/blind_b
     max_candidates: 200
     source_policy:
       requires_labeled_fit: false

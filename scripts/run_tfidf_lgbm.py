@@ -596,7 +596,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", default="protocol_tfidf_lgbm")
     parser.add_argument("--config", default="protocol_v1")
-    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts" / "cache" / "splits" / "cv3")
+    parser.add_argument("--split-dir", type=Path, default=REPO_ROOT / "artifacts" / "cache" / "splits" / "cv5")
     parser.add_argument("--blind-target", choices=("blind_a", "blind_b"), default="blind_a")
     parser.add_argument("--candidate-k", type=int, default=100)
     parser.add_argument("--final-k", type=int, default=20)
@@ -667,7 +667,7 @@ def main() -> None:
         "note": "TF-IDF is fit on track metadata only; fold splitting is not required for reranker training.",
     }
 
-    retriever_public_dir = OUTPUT_DIR / "retriever" / args.name / args.config / "cv3_oof" / "public_labeled"
+    retriever_public_dir = OUTPUT_DIR / "retriever" / args.name / args.config / "fit_free_all_rows" / "public_labeled"
     public_npz = retriever_public_dir / "candidates.npz"
     if public_npz.exists():
         print(f"loading existing public candidates from {public_npz}")
@@ -696,7 +696,7 @@ def main() -> None:
             "stage": "retriever",
             "name": args.name,
             "config": args.config,
-            "artifact_mode": "cv3_oof",
+            "artifact_mode": "fit_free_all_rows",
             "target": "public_labeled",
             "created_at": utc_now(),
             "fit_scope": retriever_fit_scope,
@@ -795,7 +795,7 @@ def main() -> None:
         seed=args.seed,
     )
 
-    retriever_blind_dir = OUTPUT_DIR / "retriever" / args.name / args.config / "full_public" / blind_target
+    retriever_blind_dir = OUTPUT_DIR / "retriever" / args.name / args.config / "fit_free_all_rows" / blind_target
     blind_npz = retriever_blind_dir / "candidates.npz"
     if blind_npz.exists():
         print(f"loading existing {blind_target} candidates from {blind_npz}")
@@ -824,7 +824,7 @@ def main() -> None:
             "stage": "retriever",
             "name": args.name,
             "config": args.config,
-            "artifact_mode": "full_public",
+            "artifact_mode": "fit_free_all_rows",
             "target": blind_target,
             "created_at": utc_now(),
             "fit_scope": retriever_fit_scope,
