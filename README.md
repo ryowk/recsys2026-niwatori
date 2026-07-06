@@ -163,7 +163,7 @@ reference/blind_b.json   the submitted responses (for diffing)
 | --- | ---: | --- |
 | `weights/two_tower/{full_public,fold0..4}.pt` | 6×44MB | trained two-tower LoRA models — loaded by `build_two_tower_lora_oof.py --load-models-dir` (used by `run_blind_b.sh`) to regenerate the two-tower candidates without retraining |
 
-Everything else is re-derivable and **not needed for the official reproduction**: the public-labeled per-source retriever artifacts, the union `source_features.npz` (36GB), `two_tower/track_features.npz`, the train/devset dense features, the CV splits, and the Spotify map. `run_blind_b.sh` / `run_train.sh` rebuild them locally.
+Everything else is re-derivable and **not needed for the official reproduction**: the public-labeled per-source retriever artifacts, the union `source_features.npz` (36GB), `two_tower/track_features.npz`, the train/devset dense features, the CV split, and the Spotify map. `run_full.sh` (from scratch) / `run_blind_b.sh` (from weights) rebuild them locally.
 
 ## Reproducibility caveats
 

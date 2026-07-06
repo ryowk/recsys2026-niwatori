@@ -2,7 +2,7 @@
 
 This document states exactly how cross-validation folds are used at each stage, and how that differs between **local CV** (measuring nDCG on public labeled rows) and the **Blind-B submission**. The single guarantee behind all of it: *no component that scores or trains on a public row uses a fitted signal that was derived from that same row.*
 
-Fold assignments come from `artifacts/cache/splits/cv5` (`public_labeled_v2_5fold`, 5 folds, seed 20260515). A separate 3-fold split `artifacts/cache/splits/cv3` is used only by the tfidf source (whose candidates are label-free, so the fold split does not affect them).
+Fold assignments come from `artifacts/cache/splits/cv5` (`public_labeled_v2_5fold`, 5 folds, seed 20260515). The tfidf source is fit-free — its candidates are label-free — so it enumerates the same public rows but its output does not depend on the fold split.
 
 ## Summary table
 
@@ -57,16 +57,14 @@ The reranker's CV train rows must read `cv5_oof` (never `full_public`) or the su
 
 ## Which build produces which artifact (CV vs submission dependency)
 
-The `cv5_oof` (CV) and `full_public` (submission) artifacts come from the same source builders, run for different targets:
+The `cv5_oof` (CV) and `full_public` (submission) artifacts come from the same source logic run for different targets; the per-stage drivers group them by target:
 
-| build step | produces | consumed by |
+| stage script | produces | consumed by |
 | --- | --- | --- |
-| `run_preprocess.sh` | `splits/{cv3,cv5}`, `spotify_uuid_map` | every source build |
-| `scripts/build_stage1_sources.sh` | `fit_free_all_rows` (bm25 / tfidf / tag / history / last / exact), public **and** blind_b | union |
-| `scripts/build_stage2_sources.sh` | `cv5_oof` (two-tower fold0-4 + cooc/transition, per-fold OOF) for public rows; `full_public` (two-tower full + cooc/transition on all public) for blind_b | union |
-| `retriever/union/main.py --target public_labeled` | public union (reads the `cv5_oof` + fit-free sources) | reranker CV |
-| `retriever/union/main.py --target blind_b` | blind_b union (reads the `full_public` + fit-free sources) | reranker submission |
-| `reranker … --target public_labeled` | 5-fold OOF ranking + scores | the CV metric |
-| `reranker … --target blind_b` | the submitted ranking (fits on all public rows, or loads the shipped model) | responder |
+| `run_preprocess.sh` | `splits/cv5`, `spotify_uuid_map`, `dense_track_emb` | every source build |
+| `run_retriever_cv5.sh` | public-labeled sources — `fit_free_all_rows` (bm25 / tfidf / tag / history / last / exact) + `cv5_oof` (two-tower fold0-4, cooc/transition) — and the **public union** | reranker CV **and** the reranker submission fit |
+| `run_retriever_blind_b.sh` | blind_b sources — `fit_free_all_rows` + `full_public` (two-tower full, cooc/transition) — and the **blind_b union** | reranker submission |
+| `run_reranker_cv5.sh` | 5-fold OOF ranking + nDCG scores | the CV metric (not the submission) |
+| `run_reranker_blind_b.sh` | the submitted ranking (fits the final model on the public union, ranks blind_b) | responder |
 
-So the CV branch (`run_cv5.sh`: stage1/2 public → union public_labeled → reranker CV) and the submission branch (stage1/2 blind_b → union blind_b → reranker blind_b, added by `run_train.sh`) share stage1/2 but diverge at the target. `run_inference.sh` skips both by loading the shipped model + the shipped blind_b union artifact.
+`run_full.sh` chains preprocess → retriever_cv5 → retriever_blind_b → reranker_blind_b → responder (the submission path). `run_reranker_blind_b.sh` needs **both** retriever stages: the public union (`cv5_oof`) for the final-model fit, and the blind_b union (`full_public`) for the prediction. `run_inference.sh` skips all of it by loading the shipped model + the shipped blind_b union artifact.
