@@ -2,7 +2,7 @@
 
 ## ロジック
 
-`exp/113_two_tower_lora_thought` の Qwen3-Embedding-0.6B LoRA query tower と、track metadata / audio / image / CF / attribute / lyrics / popularity feature 由来の track tower を使う supervised dense retriever。query text は会話履歴と current user query から作り、BlindB-safe 実行では `BLIND_B_SAFE=1` により `conversation_goal` と `thought` を使わない。
+`recsys2026.two_tower` の Qwen3-Embedding-0.6B LoRA query tower と、track metadata / audio / image / CF / attribute / lyrics / popularity feature 由来の track tower を使う supervised dense retriever。query text は会話履歴と current user query から作り、BlindB-safe 実行では `BLIND_B_SAFE=1` により `conversation_goal` と `thought` を使わない。
 
 `scripts/build_two_tower_lora_oof.py` が `cv5_oof` / `full_public` artifact を作る。`cv5_oof` では fold held-out row をその fold 外の public labeled rows で学習した model で検索し、`full_public` では public labeled 全体で fit した model を blind/test target に適用する。
 
@@ -21,8 +21,8 @@ BM25 / cooc / Markov では拾いにくい semantic match を、query tower と 
 
 入力:
 
-- `output/113_two_tower_lora_thought/track_features.npz`
-- public labeled dataset / `splits/public_labeled_v2_5fold`
+- `artifacts/cache/two_tower/track_features.npz`
+- public labeled dataset / `artifacts/cache/splits/cv5`
 - optional: `talkpl-ai/TalkPlayData-1`, `data/derived/spotify_uuid_map_v1.parquet`
 
 出力:

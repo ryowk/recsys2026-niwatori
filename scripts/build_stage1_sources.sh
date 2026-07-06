@@ -45,11 +45,11 @@ for target in public_labeled blind_b; do
 done
 
 # --- tfidf (fit on track metadata only; cv3 splits hardcoded by the runner) ---
-TF=$RUNS/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/cv3_oof/public_labeled/candidates.npz
+TF=$RUNS/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/fit_free_all_rows/public_labeled/candidates.npz
 have "$TF" && ts "skip tfidf public (exists)" || \
   run "tfidf public" uv run python scripts/run_tfidf_lgbm.py \
     --name protocol_tfidf_lgbm_k300 --config protocol_v1_bsafe --candidate-k 300
-TFB=$RUNS/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/full_public/blind_b/candidates.npz
+TFB=$RUNS/protocol_tfidf_lgbm_k300/protocol_v1_bsafe/fit_free_all_rows/blind_b/candidates.npz
 have "$TFB" && ts "skip tfidf blind_b (exists)" || \
   run "tfidf blind_b" uv run python scripts/run_tfidf_lgbm.py \
     --name protocol_tfidf_lgbm_k300 --config protocol_v1_bsafe --candidate-k 300 --blind-target blind_b
