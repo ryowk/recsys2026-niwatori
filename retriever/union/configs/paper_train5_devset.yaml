@@ -1,0 +1,120 @@
+description: >
+  Paper evaluation protocol. Reranker-fit candidates use train-only 5-fold
+  OOF artifacts; retriever evaluation and reranker inference use models fit on
+  all train rows and applied once to the official devset. Source order,
+  per-source caps, and thresholds match the final Blind-B system.
+
+split_dir: artifacts/preprocessed/splits/paper_train_cv5
+
+source_policy_defaults:
+  requires_labeled_fit: false
+  fit_sources: [track_metadata, target_input_context]
+  train_row_policy: safe_in_sample
+  fold_split_required_for_reranker_train: false
+  preferred_train_row_artifact_mode: fit_free_train5_dev
+  preferred_inference_artifact_mode: fit_free_train5_dev
+
+sources:
+  - name: bm25
+    artifact:
+      public_labeled: artifacts/runs/retriever/bm25_5field/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/bm25_5field/top500/fit_free_train5_dev/devset
+    max_candidates: 200
+  - name: tfidf
+    artifact:
+      public_labeled: artifacts/runs/retriever/tfidf_catalog/top300/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/tfidf_catalog/top300/fit_free_train5_dev/devset
+    max_candidates: 200
+  - name: twotower
+    artifact:
+      public_labeled: artifacts/runs/retriever/two_tower_lora/paper_train5_top500/train5_oof/public_labeled
+      devset: artifacts/runs/retriever/two_tower_lora/paper_train5_top500/full_train/devset
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_query_gold_pairs]
+      train_row_policy: train5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: train5_oof
+      preferred_inference_artifact_mode: full_train
+  - name: history_artist
+    artifact:
+      public_labeled: artifacts/runs/retriever/history_artist/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/history_artist/top500/fit_free_train5_dev/devset
+  - name: history_album
+    artifact:
+      public_labeled: artifacts/runs/retriever/history_album/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/history_album/top500/fit_free_train5_dev/devset
+  - name: last_artist
+    artifact:
+      public_labeled: artifacts/runs/retriever/last_music_artist/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/last_music_artist/top500/fit_free_train5_dev/devset
+  - name: last_album
+    artifact:
+      public_labeled: artifacts/runs/retriever/last_music_album/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/last_music_album/top500/fit_free_train5_dev/devset
+  - name: exact_album_artist
+    artifact:
+      public_labeled: artifacts/runs/retriever/exact_album_artist_source/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/exact_album_artist_source/top500/fit_free_train5_dev/devset
+  - name: tag_intent
+    artifact:
+      public_labeled: artifacts/runs/retriever/tag_intent_bm25/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/tag_intent_bm25/top500/fit_free_train5_dev/devset
+    max_candidates: 100
+  - name: cooc_track
+    artifact:
+      public_labeled: artifacts/runs/retriever/cooc_track_combined_tpd1/paper_train5_top500_parts/train5_oof/public_labeled
+      devset: artifacts/runs/retriever/cooc_track_combined_tpd1/paper_train5_top500_parts/full_train/devset
+    max_candidates: 500
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: train5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: train5_oof
+      preferred_inference_artifact_mode: full_train
+  - name: transition_track
+    artifact:
+      public_labeled: artifacts/runs/retriever/transition_track_combined_tpd1/paper_train5_top500_prob_parts/train5_oof/public_labeled
+      devset: artifacts/runs/retriever/transition_track_combined_tpd1/paper_train5_top500_prob_parts/full_train/devset
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: train5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: train5_oof
+      preferred_inference_artifact_mode: full_train
+  - name: cooc_album
+    artifact:
+      public_labeled: artifacts/runs/retriever/cooc_album/paper_train5_top500/train5_oof/public_labeled
+      devset: artifacts/runs/retriever/cooc_album/paper_train5_top500/full_train/devset
+    min_score: 5
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: train5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: train5_oof
+      preferred_inference_artifact_mode: full_train
+  - name: cooc_artist_name
+    artifact:
+      public_labeled: artifacts/runs/retriever/cooc_artist_name/paper_train5_top500/train5_oof/public_labeled
+      devset: artifacts/runs/retriever/cooc_artist_name/paper_train5_top500/full_train/devset
+    max_candidates: 100
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: train5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: train5_oof
+      preferred_inference_artifact_mode: full_train
+  - name: exact_title
+    artifact:
+      public_labeled: artifacts/runs/retriever/exact_title_artist_source/top500/fit_free_train5_dev/public_labeled
+      devset: artifacts/runs/retriever/exact_title_artist_source/top500/fit_free_train5_dev/devset
+
+union_rule:
+  type: ordered_unique
+  max_candidates: null

@@ -1,7 +1,0 @@
-source: history_artist
-builder: scripts/build_basic_retrievers.py
-config_file: retriever/union/configs/union_v1.yaml
-top_k: 200
-score_fields:
-- score__primary
-notes: Basic component wrapper for the selected retriever source.

@@ -1,0 +1,37 @@
+description: Train-only 5-fold OOF fit artifacts, full-train to devset inference, full feature set.
+
+candidate_artifacts:
+  public_labeled: artifacts/runs/retriever/union/paper_train5_devset/public_labeled
+  devset: artifacts/runs/retriever/union/paper_train5_devset/devset
+
+max_candidates: all
+top_k: 20
+cv_artifact_mode: train5_oof
+feature_set: full
+train_positive_only: true
+
+lgbm:
+  n_estimators: 200
+  num_leaves: 63
+  learning_rate: 0.04
+  subsample: 0.85
+  colsample_bytree: 0.85
+  min_child_samples: 20
+  n_jobs: -1
+  seed: 20260520
+
+feature_build:
+  feature_chunk_examples: 512
+  drop_cross_source_score_meta: true
+  extra_metadata_features: true
+  extra_hier_pop_features: true
+  extra_tag_chain_features: true
+  neutralize_base_features:
+    - candidate_rank
+    - log_candidate_rank
+    - reciprocal_candidate_rank
+    - prior_gpa_count
+    - prior_moves_toward_count
+    - prior_not_move_count
+    - prior_null_gpa_count
+    - goal_track_tfidf_sim

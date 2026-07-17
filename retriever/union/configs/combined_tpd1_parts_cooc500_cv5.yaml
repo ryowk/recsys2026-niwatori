@@ -1,0 +1,112 @@
+description: >
+  Final union. It combines challenge and TPD1 score parts and
+  keeps up to 500 candidates from cooc_track. The same unfiltered TPD1 rows are
+  used in every fold.
+
+split_dir: artifacts/preprocessed/splits/cv5
+
+source_policy_defaults:
+  requires_labeled_fit: false
+  fit_sources: [track_metadata, target_input_context]
+  train_row_policy: safe_in_sample
+  fold_split_required_for_reranker_train: false
+  preferred_train_row_artifact_mode: fit_free_all_rows
+  preferred_inference_artifact_mode: fit_free_all_rows
+
+sources:
+  - name: bm25
+    component: bm25_5field
+    config: top500
+    max_candidates: 200
+  - name: tfidf
+    artifact:
+      public_labeled: artifacts/runs/retriever/tfidf_catalog/top300/fit_free_all_rows/public_labeled
+      blind_b: artifacts/runs/retriever/tfidf_catalog/top300/fit_free_all_rows/blind_b
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: false
+      fit_sources: [track_metadata]
+      train_row_policy: safe_in_sample
+      preferred_train_row_artifact_mode: fit_free_all_rows
+      preferred_inference_artifact_mode: fit_free_all_rows
+  - name: twotower
+    component: two_tower_lora
+    config: oof5_top500
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_query_gold_pairs]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: history_artist
+    component: history_artist
+    config: top500
+  - name: history_album
+    component: history_album
+    config: top500
+  - name: last_artist
+    component: last_music_artist
+    config: top500
+  - name: last_album
+    component: last_music_album
+    config: top500
+  - name: exact_album_artist
+    component: exact_album_artist_source
+    config: top500
+  - name: tag_intent
+    component: tag_intent_bm25
+    config: top500
+    max_candidates: 100
+  - name: cooc_track
+    component: cooc_track_combined_tpd1
+    config: oof5_top500_parts
+    max_candidates: 500
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: cv5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: transition_track
+    component: transition_track_combined_tpd1
+    config: oof5_top500_prob_parts
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, TalkPlayData-1]
+      train_row_policy: cv5_oof_challenge_plus_external_fit_free
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: cooc_album
+    component: cooc_album
+    config: oof5_top500
+    min_score: 5
+    max_candidates: 200
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: cooc_artist_name
+    component: cooc_artist_name
+    config: oof5_top500
+    max_candidates: 100
+    source_policy:
+      requires_labeled_fit: true
+      fit_sources: [train_music_outcomes, track_metadata]
+      train_row_policy: cv5_oof_required
+      fold_split_required_for_reranker_train: true
+      preferred_train_row_artifact_mode: cv5_oof
+      preferred_inference_artifact_mode: full_public
+  - name: exact_title
+    component: exact_title_artist_source
+    config: top500
+
+union_rule:
+  type: ordered_unique
+  max_candidates: null

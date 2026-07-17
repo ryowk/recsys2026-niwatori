@@ -1,19 +1,4 @@
-"""提出 JSON の入出力 + validation。
-
-実験ごとに制御フロー(バッチサイズ、多段推論、キャッシュ、postprocess 等)は変わるので、
-共通化するのは「提出スキーマに関わる部分のみ」に限定する。
-
-公開 API:
-- Target           : "devset" | "blind_a" | "blind_b"
-- iter_inputs      : target の差を吸収して InferenceInput を yield
-- format_record    : 1 (session, turn) を提出 dict に整形
-- write_predictions: validate してから JSON 出力
-- validate_predictions: 提出スキーマ検証(全ペア充足、最大 20 件、重複なし、catalog 内 ID)
-- InferenceInput / Prediction / Predictor: per-record 推論を書くときの便利な型 (optional)
-
-実験の制御フロー本体は exp/<name>/main.py に書く。run_inference のような canonical な
-ループは敢えて提供しない(多段 pipeline や全予測 postprocess の障害になるため)。
-"""
+"""Submission input iteration, schema validation, and zip packaging."""
 
 from __future__ import annotations
 
@@ -22,11 +7,11 @@ import zipfile
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal
 
 from .data import load
 
-Target = Literal["devset", "blind_a", "blind_b"]
+Target = Literal["devset", "blind_b"]
 MAX_K = 20
 
 
@@ -35,20 +20,8 @@ class InferenceInput:
     session_id: str
     user_id: str
     turn_number: int
-    chat_history: list[dict]   # raw [{turn_number, role, content}, ...]、role=music は track_id 文字列
+    chat_history: list[dict]
     user_query: str
-
-
-@dataclass(frozen=True)
-class Prediction:
-    track_ids: list[str]       # 関連度順、最大 MAX_K、重複不可
-    response: str
-
-
-class Predictor(Protocol):
-    """per-record 予測を書くときの便利な構造的型。実験ごとに自由なので任意採用。"""
-
-    def predict(self, batch: list[InferenceInput]) -> list[Prediction]: ...
 
 
 def _iter_devset() -> Iterator[InferenceInput]:
@@ -68,8 +41,8 @@ def _iter_devset() -> Iterator[InferenceInput]:
             )
 
 
-def _iter_blind(target: Literal["blind_a", "blind_b"]) -> Iterator[InferenceInput]:
-    ds = load(target, split="test")
+def _iter_blind_b() -> Iterator[InferenceInput]:
+    ds = load("blind_b", split="test")
     for item in ds:
         conv = item["conversations"]
         yield InferenceInput(
@@ -84,14 +57,14 @@ def _iter_blind(target: Literal["blind_a", "blind_b"]) -> Iterator[InferenceInpu
 def iter_inputs(target: Target) -> Iterator[InferenceInput]:
     if target == "devset":
         yield from _iter_devset()
-    elif target in ("blind_a", "blind_b"):
-        yield from _iter_blind(target)
+    elif target == "blind_b":
+        yield from _iter_blind_b()
     else:
         raise ValueError(f"unknown target: {target}")
 
 
 def format_record(inp: InferenceInput, track_ids: list[str], response: str) -> dict:
-    """1 (session, turn) ペアを提出形式 dict に整形する。"""
+    """Format one session-turn prediction for the challenge schema."""
     return {
         "session_id": inp.session_id,
         "user_id": inp.user_id,
@@ -108,34 +81,58 @@ def validate_predictions(
     require_complete: bool = True,
     allowed_keys: set[tuple[str, int]] | None = None,
 ) -> None:
-    """提出スキーマを検証。違反があれば ValueError。
-
-    - 全 (session_id, turn_number) ペアが target に対して埋まっているか
-    - 各 record で predicted_track_ids が最大 MAX_K (20) 件、重複なし
-    - 全 track_id が catalog (Track-Metadata.all_tracks) に存在する
-    """
-    expected_all = {(inp.session_id, inp.turn_number) for inp in iter_inputs(target)}
+    """Validate target coverage, top-20 uniqueness, and catalog membership."""
+    required_fields = {
+        "session_id",
+        "user_id",
+        "turn_number",
+        "predicted_track_ids",
+        "predicted_response",
+    }
+    target_inputs = list(iter_inputs(target))
+    expected_users = {
+        (inp.session_id, inp.turn_number): inp.user_id for inp in target_inputs
+    }
+    expected_all = set(expected_users)
     expected = allowed_keys if allowed_keys is not None else expected_all
     unknown_allowed = expected - expected_all
     if unknown_allowed:
-        raise ValueError(f"allowed_keys contains keys outside target={target}, e.g. {next(iter(unknown_allowed))}")
+        raise ValueError(
+            f"allowed_keys contains keys outside target={target}, e.g. {next(iter(unknown_allowed))}"
+        )
     catalog = set(load("track", split="all_tracks")["track_id"])
     seen: set[tuple[str, int]] = set()
     for r in records:
+        if set(r) != required_fields:
+            raise ValueError(
+                f"prediction fields must be exactly {sorted(required_fields)}, "
+                f"got {sorted(r)}"
+            )
         key = (r["session_id"], r["turn_number"])
         if key in seen:
             raise ValueError(f"duplicate prediction for {key}")
         seen.add(key)
         if key not in expected:
-            raise ValueError(f"unexpected (session_id, turn_number) for target={target}: {key}")
+            raise ValueError(
+                f"unexpected (session_id, turn_number) for target={target}: {key}"
+            )
+        if r["user_id"] != expected_users[key]:
+            raise ValueError(
+                f"user_id mismatch for {key}: got={r['user_id']!r}, "
+                f"expected={expected_users[key]!r}"
+            )
         tids = r["predicted_track_ids"]
-        if len(tids) > MAX_K:
-            raise ValueError(f"too many tracks for {key}: {len(tids)} > {MAX_K}")
+        if not isinstance(tids, list) or not all(isinstance(tid, str) for tid in tids):
+            raise ValueError(f"predicted_track_ids must be a list of strings for {key}")
+        if len(tids) != MAX_K:
+            raise ValueError(f"expected {MAX_K} tracks for {key}, got {len(tids)}")
         if len(tids) != len(set(tids)):
             raise ValueError(f"duplicate track_ids in {key}")
         unknown = set(tids) - catalog
         if unknown:
             raise ValueError(f"unknown track_ids in {key}: e.g. {next(iter(unknown))}")
+        if not isinstance(r["predicted_response"], str):
+            raise ValueError(f"predicted_response must be a string for {key}")
     missing = expected - seen
     if require_complete and missing:
         raise ValueError(
@@ -152,26 +149,26 @@ def write_predictions(
     require_complete: bool = True,
     allowed_keys: set[tuple[str, int]] | None = None,
 ) -> None:
-    """validate_predictions してから JSON を書き出す。"""
-    validate_predictions(records, target, require_complete=require_complete, allowed_keys=allowed_keys)
+    """Validate and write a prediction JSON file."""
+    validate_predictions(
+        records, target, require_complete=require_complete, allowed_keys=allowed_keys
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(records, ensure_ascii=False))
+    temp_path = out_path.with_name(f".{out_path.name}.tmp")
+    temp_path.write_text(json.dumps(records, ensure_ascii=False))
+    temp_path.replace(out_path)
 
 
 def zip_submission(json_path: Path, zip_path: Path | None = None) -> Path:
-    """予測 JSON を Codabench 提出用 zip に固める。
-
-    Codabench の要件で zip 内の JSON のファイル名は exact match で `prediction.json` でなければ
-    scoring fail するため、ここで arcname を rename する。元の json_path のファイル名は任意で OK。
-
-    zip_path 省略時は元 JSON と同じディレクトリに `<stem>.submission.zip` を生成。
-    """
+    """Package JSON as the required `prediction.json` zip member."""
     json_path = Path(json_path)
     if zip_path is None:
         zip_path = json_path.with_suffix(".submission.zip")
     else:
         zip_path = Path(zip_path)
         zip_path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    temp_path = zip_path.with_name(f".{zip_path.name}.tmp")
+    with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.write(json_path, arcname="prediction.json")
+    temp_path.replace(zip_path)
     return zip_path
