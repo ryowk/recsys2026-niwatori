@@ -3,16 +3,18 @@ name = "recsys2026"
 version = "1.0.0"
 description = "RecSys Challenge 2026 (Music CRS)"
 readme = "README.md"
+authors = [{ name = "ryowk" }]
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
     "accelerate==1.13.0",
     "bm25s==0.3.8",
-    "click>=8.4.2",
     "datasets==4.8.5",
     "huggingface-hub==1.13.0",
     "lightgbm==4.6.0",
+    "matplotlib>=3.11.0",
     "numpy==2.3.5",
-    "polars==1.40.1",
+    "pyarrow==24.0.0",
     "pyyaml==6.0.3",
     "scikit-learn==1.8.0",
     "scipy==1.17.1",
@@ -28,3 +30,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/recsys2026"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]

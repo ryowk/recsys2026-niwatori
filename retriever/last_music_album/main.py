@@ -1,14 +1,36 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+"""Build the last-music album retriever artifact."""
 
-import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
+import numpy as np
 
-from retriever._basic_wrapper import main
+from recsys2026.fit_free_runner import FitFreeSpec, main as run_component
+from recsys2026.retriever_common import as_list
+
+
+def score(example, track_index):
+    metadata = next(
+        (
+            track_index.meta_by_id.get(str(turn.get("content") or ""))
+            for turn in reversed(example.chat_history)
+            if turn.get("role") == "music"
+        ),
+        None,
+    )
+    albums = {
+        str(value) for value in as_list((metadata or {}).get("album_id")) if value
+    }
+    if not albums:
+        return None
+    values = np.zeros(track_index.n_tracks, dtype=np.float32)
+    for album_id in albums:
+        for index in track_index.album_to_idx.get(album_id, []):
+            values[index] += 1.0
+    return values
+
+
+SPEC = FitFreeSpec("last_music_album", Path(__file__), score_fn=score)
 
 
 if __name__ == "__main__":
-    main(__file__)
+    run_component(SPEC)

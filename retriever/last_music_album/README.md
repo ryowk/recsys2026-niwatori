@@ -1,36 +1,13 @@
 # retriever/last_music_album
 
-## ロジック
+## Logic and purpose
 
-target turn の chat history から最後の music track を取り、その track と同じ album に属する catalog tracks を返す。学習 label は使わない fit-free source で、候補順と `score__primary` は source 内の一致強度 / rank に由来する。
+Returns catalog tracks from the album of the last music track before the target turn. It provides an album-level recency signal.
 
-## 意図
+## Configuration and artifacts
 
-ユーザが直前の曲と同じ album の別曲や、album 文脈の続きを求めているケースを拾う。`history_album` は history 全体の album を使うが、`last_music_album` は直近 music turn だけに絞るため、recency signal として扱える。
+Parameters live in `main.py`. Inputs are pre-target music history and catalog metadata. Artifacts are written to `artifacts/runs/retriever/last_music_album/<config>/fit_free_all_rows/<target>/`.
 
-## 設定
+## Fit and leakage
 
-- `basic.yaml`: 最大 200 candidates を保存する標準 config。
-- `top500.yaml`: union / reranker で後段に絞れるよう、最大 500 candidates を保存する広めの config。
-
-## 入出力 artifact
-
-入力:
-
-- target turn の history music tracks
-- `track` metadata の album 情報
-
-出力:
-
-- `artifacts/runs/retriever/last_music_album/top500/fit_free_all_rows/public_labeled/candidates.npz`
-- `artifacts/runs/retriever/last_music_album/top500/fit_free_all_rows/blind_b/candidates.npz`
-
-`score__primary` は source 内の一致強度 / rank 用 score。異なる retriever の score とスケールを揃えたものではないため、union 側で cross-source max などには使わず、reranker には source 固有 feature として渡す。
-
-## fit / leak 確認
-
-label outcome を使わない fit-free retriever なので OOF は不要。target turn より未来の情報や `track_emb.test_tracks` は使わない。popularity tie-breaker は使わない。
-
-## 結果と学び
-
-devset 単体評価では mean size 約5.4、recall@all 約0.177。候補数が小さく precision が高いので、source feature として必ず残したい recency source。
+Fit-free. The seed album comes from the latest pre-target music turn.

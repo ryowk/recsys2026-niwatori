@@ -15,22 +15,38 @@ import numpy as np
 
 from .data import load
 from .paths import OUTPUT_DIR, REPO_ROOT, RESULTS_DIR
-from .submission import Target, format_record, iter_inputs, write_predictions, zip_submission
+from .submission import (
+    Target,
+    format_record,
+    iter_inputs,
+)
 
 Stage = Literal["preprocess", "retriever", "reranker", "responder", "pipeline"]
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
 
 
 def json_dump(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
+    temp_path = path.with_name(f".{path.name}.tmp")
+    temp_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
+    temp_path.replace(path)
 
 
 def json_load(path: Path) -> Any:
     return json.loads(Path(path).read_text())
+
+
+def artifact_complete(path: Path, *required_files: str) -> bool:
+    """Return true only after the manifest and all declared outputs exist."""
+    path = Path(path)
+    return (path / "manifest.json").is_file() and all(
+        (path / name).is_file() for name in required_files
+    )
 
 
 def sha256_file(path: Path, chunk_size: int = 1 << 20) -> str:
@@ -111,7 +127,9 @@ def target_keys(target: Target) -> list[tuple[str, int]]:
 
 
 def encode_keys(keys: list[tuple[str, int]]) -> np.ndarray:
-    return np.asarray([f"{sid}:{turn}".encode("utf-8") for sid, turn in keys], dtype="S96")
+    return np.asarray(
+        [f"{sid}:{turn}".encode("utf-8") for sid, turn in keys], dtype="S96"
+    )
 
 
 def decode_keys(arr: np.ndarray) -> list[tuple[str, int]]:
@@ -128,15 +146,21 @@ def assert_target_alignment(keys: list[tuple[str, int]], target: Target) -> None
     if keys != expected:
         for i, (got, exp) in enumerate(zip(keys, expected, strict=False)):
             if got != exp:
-                raise ValueError(f"row alignment mismatch at {i}: got={got}, expected={exp}")
-        raise ValueError(f"row count mismatch: got={len(keys)}, expected={len(expected)}")
+                raise ValueError(
+                    f"row alignment mismatch at {i}: got={got}, expected={exp}"
+                )
+        raise ValueError(
+            f"row count mismatch: got={len(keys)}, expected={len(expected)}"
+        )
 
 
 def write_turns(path: Path, target: Target) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    temp_path = path.with_name(f".{path.name}.tmp")
+    with temp_path.open("w", encoding="utf-8") as f:
         for row in target_rows(target):
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    temp_path.replace(path)
 
 
 def track_id_lookup() -> tuple[list[str], dict[str, int]]:
@@ -145,16 +169,13 @@ def track_id_lookup() -> tuple[list[str], dict[str, int]]:
     return ids, {tid: i for i, tid in enumerate(ids)}
 
 
-def track_ids_to_idx(track_ids: list[str]) -> np.ndarray:
-    _, lookup = track_id_lookup()
-    return np.asarray([lookup[tid] for tid in track_ids], dtype=np.int32)
-
-
 def _validate_rows(track_idx: np.ndarray, sizes: np.ndarray) -> None:
     if track_idx.ndim != 2:
         raise ValueError(f"track_idx must be 2D, got shape={track_idx.shape}")
     if sizes.ndim != 1 or sizes.shape[0] != track_idx.shape[0]:
-        raise ValueError(f"sizes shape mismatch: track_idx={track_idx.shape}, sizes={sizes.shape}")
+        raise ValueError(
+            f"sizes shape mismatch: track_idx={track_idx.shape}, sizes={sizes.shape}"
+        )
     width = track_idx.shape[1]
     for i, size_raw in enumerate(sizes):
         size = int(size_raw)
@@ -169,10 +190,46 @@ def _validate_rows(track_idx: np.ndarray, sizes: np.ndarray) -> None:
 
 def _save_npz(path: Path, compress: bool, arrays: dict[str, np.ndarray]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if compress:
-        np.savez_compressed(path, **arrays)
-    else:
-        np.savez(path, **arrays)
+    temp_path = path.with_name(f".{path.name}.tmp")
+    with temp_path.open("wb") as handle:
+        if compress:
+            np.savez_compressed(handle, **arrays)
+        else:
+            np.savez(handle, **arrays)
+    temp_path.replace(path)
+
+
+def jsonl_dump(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Atomically write JSON Lines."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp")
+    with temp_path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    temp_path.replace(path)
+
+
+def npz_dump(
+    path: Path, arrays: dict[str, np.ndarray], *, compress: bool = False
+) -> None:
+    """Atomically write a NumPy archive."""
+    _save_npz(path, compress, arrays)
+
+
+def save_npz_artifact(
+    artifact_dir: Path,
+    arrays: dict[str, np.ndarray],
+    turn_rows: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    *,
+    compress: bool = True,
+) -> None:
+    """Write a custom candidate artifact with the manifest as completion marker."""
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "manifest.json").unlink(missing_ok=True)
+    npz_dump(artifact_dir / "candidates.npz", arrays, compress=compress)
+    jsonl_dump(artifact_dir / "turns.jsonl", turn_rows)
+    json_dump(artifact_dir / "manifest.json", manifest)
 
 
 def save_candidate_artifact(
@@ -191,12 +248,15 @@ def save_candidate_artifact(
     compress: bool = False,
 ) -> None:
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "manifest.json").unlink(missing_ok=True)
     track_idx = np.asarray(track_idx, dtype=np.int32)
     sizes = np.asarray(sizes, dtype=np.int32)
     _validate_rows(track_idx, sizes)
     keys = target_keys(target)
     if len(keys) != track_idx.shape[0]:
-        raise ValueError(f"target row count mismatch: target={len(keys)} artifact={track_idx.shape[0]}")
+        raise ValueError(
+            f"target row count mismatch: target={len(keys)} artifact={track_idx.shape[0]}"
+        )
 
     arrays: dict[str, np.ndarray] = {
         "track_idx": track_idx,
@@ -249,12 +309,15 @@ def save_ranked_artifact(
     compress: bool = False,
 ) -> None:
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "manifest.json").unlink(missing_ok=True)
     track_idx = np.asarray(track_idx, dtype=np.int32)
     sizes = np.asarray(sizes, dtype=np.int32)
     _validate_rows(track_idx, sizes)
     keys = target_keys(target)
     if len(keys) != track_idx.shape[0]:
-        raise ValueError(f"target row count mismatch: target={len(keys)} artifact={track_idx.shape[0]}")
+        raise ValueError(
+            f"target row count mismatch: target={len(keys)} artifact={track_idx.shape[0]}"
+        )
 
     arrays: dict[str, np.ndarray] = {
         "track_idx": track_idx,
@@ -266,7 +329,9 @@ def save_ranked_artifact(
     else:
         arrays["scores"] = np.full(track_idx.shape, np.nan, dtype=np.float32)
     if source_candidate_rank is not None:
-        arrays["source_candidate_rank"] = np.asarray(source_candidate_rank, dtype=np.int32)
+        arrays["source_candidate_rank"] = np.asarray(
+            source_candidate_rank, dtype=np.int32
+        )
 
     _save_npz(artifact_dir / "ranked.npz", compress, arrays)
     write_turns(artifact_dir / "turns.jsonl", target)
@@ -307,16 +372,3 @@ def records_from_ranked_artifact(
         tids = [track_ids[int(idx)] for idx in row[:size] if int(idx) >= 0]
         records.append(format_record(inp, tids, response))
     return records
-
-
-def write_prediction_export(
-    ranked_artifact: Path,
-    out_json: Path,
-    target: Target,
-    *,
-    top_k: int = 20,
-    response: str = "",
-) -> Path:
-    records = records_from_ranked_artifact(ranked_artifact, target, top_k=top_k, response=response)
-    write_predictions(records, out_json, target)
-    return zip_submission(out_json)

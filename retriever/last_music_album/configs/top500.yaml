@@ -1,9 +1,0 @@
-source: last_music_album
-builder: scripts/build_basic_retrievers.py
-config_file: retriever/union/configs/union_v1.yaml
-top_k: 500
-score_fields:
-  - score__primary
-notes: >
-  最後の history music track と同じ album の catalog tracks を広めに保存する
-  fit-free retriever config。

@@ -1,0 +1,19 @@
+description: Final fit-free retrieval sources used by the submitted pipeline.
+
+source_policy_defaults:
+  requires_labeled_fit: false
+  fit_sources: [track_metadata, target_input_context]
+  train_row_policy: safe_in_sample
+  fold_split_required_for_reranker_train: false
+  preferred_train_row_artifact_mode: fit_free_all_rows
+  preferred_inference_artifact_mode: fit_free_all_rows
+
+sources:
+  - bm25_5field
+  - tag_intent_bm25
+  - history_artist
+  - history_album
+  - last_music_artist
+  - last_music_album
+  - exact_album_artist_source
+  - exact_title_artist_source
